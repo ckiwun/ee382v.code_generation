@@ -7,6 +7,8 @@
 
 //added by me
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/Module.h"
 #include <iostream>
 #include <vector>
 #include <map>
@@ -18,9 +20,13 @@
 namespace ee382v
 {
 using llvm::BasicBlock;
+using llvm::Function;
+using llvm::Module;
 using llvm::Loop;
 
 class BasicBlock;
+class Function;
+class Module;
 class BL_Node;
 class BL_Edge;
 class BL_DAG;
@@ -120,12 +126,17 @@ private:
 class BL_DAG {
 public:
 	BL_DAG(Loop* loop, unsigned loopid)
-	: _entry(NULL), _exit(NULL), _loop(loop), _loopid(loopid), _npath(-1) {}
+	: _entry(NULL), _exit(NULL), _loop(loop), _loopid(loopid), _npath(-1) {
+		_function = _loop->getHeader()->getParent();
+		_module = _function->getParent();
+		_blocks = _loop->getBlocks();
+	}
 	//remember to release all memory
 	~BL_DAG();
 	
 	//High-Level API
 	void build();
+	void insert_pseudoexit();
 	void topological_sort();
 	void calculatePathNumbers();
 
@@ -144,6 +155,7 @@ public:
 	BLNode_riter rend() {return _nodes.rend();}
 
 private:
+	BL_Edge* existEdge(BL_Node*, BL_Node*);
 	BL_Node* createNode(BasicBlock* BB) {
 		BL_Node* node = new BL_Node(BB);
 		return node;
@@ -156,6 +168,10 @@ private:
 		_nodes.push_back(node);
 	}
 	void addEdge(BL_Edge* edge) {
+		BL_Node* source = edge->getSource();
+		BL_Node* target = edge->getTarget();
+		source->addSuccEdge(edge);
+		target->addPredEdge(edge);
 		_edges.push_back(edge);
 	}
 	void buildNode(BLBlockNodeMap& inDag, BLNodeStack& dfsStack);
@@ -163,9 +179,12 @@ private:
 	BLNodeVector _nodes;
 	BLEdgeVector _edges;
 	BLBlockNodeMap _indag;
+	std::vector<BasicBlock*> _blocks;
 	BL_Node* _entry;
 	BL_Node* _exit;
 	Loop* _loop;
+	Function* _function;
+	Module* _module;
 	unsigned _loopid;
 	int _npath;
 };

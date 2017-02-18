@@ -12,6 +12,8 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/IR/BasicBlock.h"
 
+#include <string>
+
 using namespace ee382v;
 using namespace llvm;
 
@@ -83,17 +85,43 @@ void BL_DAG::buildEdge(BLBlockNodeMap& inDag, BLNodeStack& dfsStack, BL_Node* cu
 	}
 }
 
+void BL_DAG::insert_pseudoexit() {
+	BasicBlock* pseudoexit;
+	BL_Node* node;
+	BL_Edge* edge;
+	std::string ebname = "ps.exit";
+	unsigned number = 0;
+	//Insert pseudo exit block first
+	for(auto block : _blocks) {
+		if(!_loop->isLoopExiting(block)) continue;
+		pseudoexit = BasicBlock::Create(_module->getContext(),ebname+std::to_string(number),_function);
+		pseudoexit->moveAfter(block);
+		node = createNode(pseudoexit);
+		edge = createEdge(_indag[block],node);
+		addNode(node);
+		addEdge(edge);
+		number++;
+	}
+	pseudoexit = BasicBlock::Create(_module->getContext(),ebname+std::to_string(number),_function);
+	pseudoexit->moveAfter(_loop->getLoopLatch());
+	node = createNode(pseudoexit);
+	edge = createEdge(_indag[_loop->getLoopLatch()],node);
+	addNode(node);
+	addEdge(edge);
+}
+
 void BL_DAG::build() {
 	BLNodeStack dfsStack;
 
 	BL_Node* node = createNode(_loop->getHeader());
 	_entry = node;
-	this->_exit = NULL;
+	_exit = NULL;
 
 	dfsStack.push(node);
 
 	while(!dfsStack.empty())
 		buildNode(_indag, dfsStack);
+
 }
 
 void BL_DAG::printInfo(bool is_inner) {
@@ -105,15 +133,14 @@ void BL_DAG::printInfo(bool is_inner) {
 		outs() << ", Outer Loop]";
 		return;
 	}
-	std::vector<BasicBlock*> blocks = _loop->getBlocks();
 
 	auto pref = "";
-	//outs() << "\nOriginal BB List: ";
-	//for(auto block : blocks) {
-	//	outs() << pref << block->getName();
-	//	pref = ", ";
-	//}
-	//pref = "";
+	outs() << "\n[Info] Original BB List: ";
+	for(auto block : _blocks) {
+		outs() << pref << block->getName();
+		pref = ", ";
+	}
+	pref = "";
 	outs() << "\n[Info] Node List: ";
 	for(auto node : _nodes) {
 		outs() << pref << node->getBlock()->getName();
@@ -130,7 +157,7 @@ void BL_DAG::printInfo(bool is_inner) {
 	//Where finalize_reg should be instrumented
 	//Insert pseudo exit block first
 	outs() << "[Info] ExitingBlocks: ";
-	for(auto block : blocks) {
+	for(auto block : _blocks) {
 		if(!_loop->isLoopExiting(block)) continue;
 		outs() << pref << block->getName();
 		pref = ", ";
@@ -150,8 +177,56 @@ void BL_DAG::printInfo(bool is_inner) {
 	outs() << "\n";
 }
 
-void BL_DAG::topological_sort() {
+BL_Edge* BL_DAG::existEdge(BL_Node* source, BL_Node* target) {
+	for(auto edge:_edges) {
+		if(source==edge->getSource()&&target==edge->getTarget())
+			return edge;
+	}
+	return NULL;
+}
 
+void BL_DAG::topological_sort() {
+	//Stack storing "no incoming edge" node
+	BLNodeQueue S;
+	BLNodeVector shadow(_nodes);
+	_nodes.clear();
+	std::map<BL_Node*,bool> selected;
+
+	for(auto node:shadow)
+		selected[node] = false;
+
+	do {
+		for(auto node:shadow){
+			if(node->getNumberPredEdges()==0 && !selected[node]){
+				selected[node] = true;
+				S.push(node);
+			}
+		}
+		BL_Node* current_node = S.front();
+		_nodes.push_back(current_node);
+		S.pop();
+		BL_Edge* edge;
+		for(auto node : shadow){
+			if(node==current_node) continue;
+			outs() << "remove edge!!!\n";
+			edge = existEdge(current_node,node);
+			if(edge){
+				outs() << "edge detected current to node\n";
+				current_node->removeSuccEdge(edge);
+				node->removePredEdge(edge);
+				for(auto it=shadow.begin();it!=shadow.end();it++)
+					if((*it)==current_node) shadow.erase(it);
+			}
+			edge = existEdge(node,current_node);
+			if(edge){
+				outs() << "edge detected node to current\n";
+				current_node->removePredEdge(edge);
+				node->removeSuccEdge(edge);
+				for(auto it=shadow.begin();it!=shadow.end();it++)
+					if((*it)==current_node) shadow.erase(it);
+			}
+		}		
+	} while(!S.empty());
 }
 
 void BL_DAG::calculatePathNumbers() {
@@ -167,20 +242,18 @@ bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 		dag->printInfo(false);
 		return false;
 	}
-	else {
-		inner[global_loop_id++] = true;
-		dag->build();
-		dag->printInfo(true);
-	}
+	inner[global_loop_id++] = true;
 
 	//2. build dag with all BB within this loop
-	//if(global_loop_id==0) dag->print();
+	dag->build();
+	//dag->insert_pseudoexit();
 
 	//3. topological_sort
-	dag->topological_sort();
+	//dag->topological_sort();
 
 	//4. calculate and assign edge value
 	dag->calculatePathNumbers();
+	dag->printInfo(true);
 
 	//optimization (optional)
 
@@ -189,6 +262,10 @@ bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 
 	return false;
 
+	//Module *M = L->getPreheader()->getParent()->getParent() ;
+	//Constant *PrintFunc;
+	//PrintFunc = M->getOrInsertFunction("Print", Type::getVoidTy(M->getContext()), (Type*)0);
+	//FPrint= cast<Function>(PrintFunc);//Fprint is Function *Fprint defined in Mypass;
 	//LoopInfo& loopInfo = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
 	//DominatorTree& domTree = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
 	//DomTreeNode *node = domTree.getNode(loop->getHeader());
