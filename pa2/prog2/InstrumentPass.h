@@ -135,9 +135,9 @@ public:
 	Loop* getLoop() const {return _loop;}
 	unsigned getLoopID() const {return _loopid;}
 	int getNumberOfPaths() const {return _npath;}
-	void print();
+	void printInfo(bool);
 
-	//Iterators
+	//Iterators (valid only after topological sort)
 	BLNode_iter begin() {return _nodes.begin();}
 	BLNode_iter end() {return _nodes.end();}
 	BLNode_riter rbegin() {return _nodes.rbegin();}
@@ -162,6 +162,7 @@ private:
 	void buildEdge(BLBlockNodeMap& inDag, BLNodeStack& dfsStack, BL_Node* currentNode, BasicBlock* succBB);
 	BLNodeVector _nodes;
 	BLEdgeVector _edges;
+	BLBlockNodeMap _indag;
 	BL_Node* _entry;
 	BL_Node* _exit;
 	Loop* _loop;

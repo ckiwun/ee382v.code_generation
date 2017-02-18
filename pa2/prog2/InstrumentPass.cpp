@@ -52,6 +52,7 @@ void BL_DAG::buildNode(BLBlockNodeMap& inDag, BLNodeStack& dfsStack) {
 		// iterate through this node's successors
 		for(succ_iterator succ = succ_begin(currentBlock); succ != succ_end(currentBlock); ++succ ) {
 			BasicBlock* succBB = *succ;
+			if(!_loop->contains(succBB)) continue;
 			buildEdge(inDag, dfsStack, currentNode, succBB);
 		}
 	}
@@ -66,7 +67,7 @@ void BL_DAG::buildEdge(BLBlockNodeMap& inDag, BLNodeStack& dfsStack, BL_Node* cu
 	}
 	else if(succNode && succNode->getColor() == BL_Node::GRAY) {
 		// visited node and back edge
-		outs() << "Backedge detected.\n";
+		// outs() << "Backedge detected.\n";
 	}
 	else {
 		BL_Node* childNode;
@@ -83,42 +84,70 @@ void BL_DAG::buildEdge(BLBlockNodeMap& inDag, BLNodeStack& dfsStack, BL_Node* cu
 }
 
 void BL_DAG::build() {
-	BLBlockNodeMap inDag;
 	BLNodeStack dfsStack;
 
 	BL_Node* node = createNode(_loop->getHeader());
 	_entry = node;
 	this->_exit = NULL;
 
-	addNode(node);
 	dfsStack.push(node);
 
 	while(!dfsStack.empty())
-		buildNode(inDag, dfsStack);
+		buildNode(_indag, dfsStack);
 }
 
-void BL_DAG::print() {
-	outs() << "Loop #" << getLoopID() << "\n";
-	auto pref = "";
-	outs() << "Original BB List: \n";
-	std::vector<BasicBlock*> blocks = _loop->getBlocks();
-	for(auto block : blocks) {
-		outs() << pref << block->getName();
-		pref = ", ";
+void BL_DAG::printInfo(bool is_inner) {
+	outs() << "[Loop #" << getLoopID();
+	if(is_inner) {
+		outs() << ", Innermost Loop]";
 	}
+	else {
+		outs() << ", Outer Loop]";
+		return;
+	}
+	std::vector<BasicBlock*> blocks = _loop->getBlocks();
 
-	pref = "";
-	outs() << "\nNode List:";
+	auto pref = "";
+	//outs() << "\nOriginal BB List: ";
+	//for(auto block : blocks) {
+	//	outs() << pref << block->getName();
+	//	pref = ", ";
+	//}
+	//pref = "";
+	outs() << "\n[Info] Node List: ";
 	for(auto node : _nodes) {
 		outs() << pref << node->getBlock()->getName();
 		pref = ", ";
 	}
 
-	outs() << "\nEdge List:";
+	outs() << "\n[Info] Edge List:\n";
 	for(auto edge : _edges) {
 		outs() << edge->getSource()->getBlock()->getName() << " => ";
 		outs() << edge->getTarget()->getBlock()->getName() << "\n";
 	}
+
+	pref = "";
+	//Where finalize_reg should be instrumented
+	//Insert pseudo exit block first
+	outs() << "[Info] ExitingBlocks: ";
+	for(auto block : blocks) {
+		if(!_loop->isLoopExiting(block)) continue;
+		outs() << pref << block->getName();
+		pref = ", ";
+	}
+	outs() << "\n[Info] Latch: " << _loop->getLoopLatch()->getName();
+
+	//Where init_reg should be instrumented
+	outs() << "\n[Info] FirstNonPhi: " << _loop->getHeader()->getFirstNonPHI()->getName();
+
+	//Where inc_reg should be instrumented
+	outs() << "\n[Info] NonZeroEdge: ";
+	for(auto edge : _edges) {
+		if(!edge->getWeight()) continue;
+		outs() << edge->getSource()->getBlock()->getName() << " => ";
+		outs() << edge->getTarget()->getBlock()->getName() << ", ";
+	}
+	outs() << "\n";
 }
 
 void BL_DAG::topological_sort() {
@@ -131,16 +160,21 @@ void BL_DAG::calculatePathNumbers() {
 
 bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 {
+	BL_DAG* dag = new BL_DAG(loop,global_loop_id);
 	//1. mark inner[loopid] false if not inner most loop
 	if(!loop->getSubLoops().empty()) {
 		inner[global_loop_id++] = false;
+		dag->printInfo(false);
 		return false;
+	}
+	else {
+		inner[global_loop_id++] = true;
+		dag->build();
+		dag->printInfo(true);
 	}
 
 	//2. build dag with all BB within this loop
-	BL_DAG* dag = new BL_DAG(loop,global_loop_id);
-	dag->build();
-	if(global_loop_id==0) dag->print();
+	//if(global_loop_id==0) dag->print();
 
 	//3. topological_sort
 	dag->topological_sort();
@@ -153,7 +187,6 @@ bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 	//5. instruement [r+=weight(e)] at CHORD edge
 	//6. instrument [count[loopid,r]++] at latch
 
-	inner[global_loop_id++] = true;
 	return false;
 
 	//LoopInfo& loopInfo = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
@@ -169,11 +202,11 @@ bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 }
 
 bool InstrumentPass::doFinalization() {
-	auto pref = "";
-	for(int i=0;i<global_loop_id;i++) {
-		outs() << pref << inner[i];
-		pref = ", ";
-	}
+	//auto pref = "";
+	//for(int i=0;i<global_loop_id;i++) {
+	//	outs() << pref << inner[i];
+	//	pref = ", ";
+	//}
 	outs() << "\nFinish Instruementation!\n";
 	return false;
 }
