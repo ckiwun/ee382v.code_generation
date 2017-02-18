@@ -17,6 +17,9 @@
 
 namespace ee382v
 {
+using llvm::BasicBlock;
+using llvm::Loop;
+
 class BasicBlock;
 class BL_Node;
 class BL_Edge;
@@ -27,9 +30,9 @@ typedef std::vector<BL_Node*>::iterator BLNode_iter;
 typedef std::vector<BL_Node*>::reverse_iterator BLNode_riter;
 typedef std::vector<BL_Edge*> BLEdgeVector;
 typedef std::vector<BL_Edge*>::iterator BLEdge_iter;
+typedef std::map<BasicBlock*, BL_Node*> BLBlockNodeMap;
 typedef std::stack<BL_Node*> BLNodeStack;
 typedef std::queue<BL_Node*> BLNodeQueue;
-typedef llvm::Loop Loop;
 
 class InstrumentPass: public llvm::LoopPass
 {
@@ -82,7 +85,7 @@ public:
 	BLEdge_iter succEnd() {return _succEdges.end();}
 	
 private:
-	BasicBlock* _basicBlock;
+	llvm::BasicBlock* _basicBlock;
 	BLEdgeVector _predEdges;
 	BLEdgeVector _succEdges;
 	unsigned _numberPaths;
@@ -116,13 +119,13 @@ private:
 
 class BL_DAG {
 public:
-	BL_DAG(Loop* loop)
-	: _entry(NULL), _exit(NULL), _loop(loop), _npath(-1) {}
+	BL_DAG(Loop* loop, unsigned loopid)
+	: _entry(NULL), _exit(NULL), _loop(loop), _loopid(loopid), _npath(-1) {}
 	//remember to release all memory
 	~BL_DAG();
 	
 	//High-Level API
-	void build(Loop* loop);
+	void build();
 	void topological_sort();
 	void calculatePathNumbers();
 
@@ -130,7 +133,9 @@ public:
 	BL_Node* getEntry() const {return _entry;}
 	BL_Node* getExit() const {return _exit;}
 	Loop* getLoop() const {return _loop;}
-	unsigned getNumberOfPaths() const {return _npath;}
+	unsigned getLoopID() const {return _loopid;}
+	int getNumberOfPaths() const {return _npath;}
+	void print();
 
 	//Iterators
 	BLNode_iter begin() {return _nodes.begin();}
@@ -153,12 +158,14 @@ private:
 	void addEdge(BL_Edge* edge) {
 		_edges.push_back(edge);
 	}
-
+	void buildNode(BLBlockNodeMap& inDag, BLNodeStack& dfsStack);
+	void buildEdge(BLBlockNodeMap& inDag, BLNodeStack& dfsStack, BL_Node* currentNode, BasicBlock* succBB);
 	BLNodeVector _nodes;
 	BLEdgeVector _edges;
 	BL_Node* _entry;
 	BL_Node* _exit;
 	Loop* _loop;
+	unsigned _loopid;
 	int _npath;
 };
 

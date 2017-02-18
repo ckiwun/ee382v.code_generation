@@ -5,10 +5,12 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/Interval.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/IR/BasicBlock.h"
 
 using namespace ee382v;
 using namespace llvm;
@@ -33,8 +35,90 @@ bool BL_Node::removeSuccEdge(BL_Edge* edge) {
 	return false;
 }
 
-void BL_DAG::build(Loop* loop) {
+void BL_DAG::buildNode(BLBlockNodeMap& inDag, BLNodeStack& dfsStack) {
+	BL_Node* currentNode = dfsStack.top();
+	BasicBlock* currentBlock = currentNode->getBlock();
+	
+	if(currentNode->getColor() != BL_Node::WHITE) {
+		// we have already visited this node
+		dfsStack.pop();
+		currentNode->setColor(BL_Node::BLACK);
+	}
+	else {
+		addNode(currentNode);
+		currentNode->setColor(BL_Node::GRAY);
+		inDag[currentBlock] = currentNode;
+		
+		// iterate through this node's successors
+		for(succ_iterator succ = succ_begin(currentBlock); succ != succ_end(currentBlock); ++succ ) {
+			BasicBlock* succBB = *succ;
+			buildEdge(inDag, dfsStack, currentNode, succBB);
+		}
+	}
+}
 
+void BL_DAG::buildEdge(BLBlockNodeMap& inDag, BLNodeStack& dfsStack, BL_Node* currentNode, BasicBlock* succBB) {
+	BL_Node* succNode = inDag[succBB];
+	
+	if(succNode && succNode->getColor() == BL_Node::BLACK) {
+		// visited node and forward edge
+		addEdge(createEdge(currentNode, succNode));
+	}
+	else if(succNode && succNode->getColor() == BL_Node::GRAY) {
+		// visited node and back edge
+		outs() << "Backedge detected.\n";
+	}
+	else {
+		BL_Node* childNode;
+		// not visited node and forward edge
+		if(succNode) // an unvisited node that is child of a gray node
+			childNode = succNode;
+		else { // an unvisited node that is a child of a an unvisted node
+			childNode = createNode(succBB);
+			inDag[succBB] = childNode;
+		}
+		addEdge(createEdge(currentNode, childNode));
+		dfsStack.push(childNode);
+	}
+}
+
+void BL_DAG::build() {
+	BLBlockNodeMap inDag;
+	BLNodeStack dfsStack;
+
+	BL_Node* node = createNode(_loop->getHeader());
+	_entry = node;
+	this->_exit = NULL;
+
+	addNode(node);
+	dfsStack.push(node);
+
+	while(!dfsStack.empty())
+		buildNode(inDag, dfsStack);
+}
+
+void BL_DAG::print() {
+	outs() << "Loop #" << getLoopID() << "\n";
+	auto pref = "";
+	outs() << "Original BB List: \n";
+	std::vector<BasicBlock*> blocks = _loop->getBlocks();
+	for(auto block : blocks) {
+		outs() << pref << block->getName();
+		pref = ", ";
+	}
+
+	pref = "";
+	outs() << "\nNode List:";
+	for(auto node : _nodes) {
+		outs() << pref << node->getBlock()->getName();
+		pref = ", ";
+	}
+
+	outs() << "\nEdge List:";
+	for(auto edge : _edges) {
+		outs() << edge->getSource()->getBlock()->getName() << " => ";
+		outs() << edge->getTarget()->getBlock()->getName() << "\n";
+	}
 }
 
 void BL_DAG::topological_sort() {
@@ -52,13 +136,11 @@ bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 		inner[global_loop_id++] = false;
 		return false;
 	}
-	else {
-		inner[global_loop_id++] = true;
-	}
 
 	//2. build dag with all BB within this loop
-	BL_DAG* dag;
-	dag->build(loop);
+	BL_DAG* dag = new BL_DAG(loop,global_loop_id);
+	dag->build();
+	if(global_loop_id==0) dag->print();
 
 	//3. topological_sort
 	dag->topological_sort();
@@ -71,6 +153,9 @@ bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 	//5. instruement [r+=weight(e)] at CHORD edge
 	//6. instrument [count[loopid,r]++] at latch
 
+	inner[global_loop_id++] = true;
+	return false;
+
 	//LoopInfo& loopInfo = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
 	//DominatorTree& domTree = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
 	//DomTreeNode *node = domTree.getNode(loop->getHeader());
@@ -81,13 +166,15 @@ bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 	//CallInst *call = CallInst::Create(...);
 	//call->insertBefore(???->getFirstNonPHI());
 	//call->insertBefore(latch->getTerminator());
-	return false;
 }
 
 bool InstrumentPass::doFinalization() {
-	for(int i=0;i<global_loop_id;i++)
-		outs() << inner[i] << "\n";
-	outs() << "Finish Instruementation!\n";
+	auto pref = "";
+	for(int i=0;i<global_loop_id;i++) {
+		outs() << pref << inner[i];
+		pref = ", ";
+	}
+	outs() << "\nFinish Instruementation!\n";
 	return false;
 }
 

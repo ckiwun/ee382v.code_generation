@@ -4,7 +4,7 @@
 
 int
 main(int argc, char **argv) {
-	for (int count = 0; count < 10; count++){
+	for (int count = 0; count < 5; count++){
   		for (int i = 0, e = atoi(argv[1]); i < e; ++i) {
   		  if ((i + argc) % 3) {
   		    printf("For1 Truey\n");
