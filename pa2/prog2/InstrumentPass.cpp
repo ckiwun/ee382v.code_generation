@@ -11,6 +11,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/InstrTypes.h"
 
 #include <string>
 
@@ -54,13 +55,14 @@ void BL_DAG::buildNode(BLBlockNodeMap& inDag, BLNodeStack& dfsStack) {
 		// iterate through this node's successors
 		for(succ_iterator succ = succ_begin(currentBlock); succ != succ_end(currentBlock); ++succ ) {
 			BasicBlock* succBB = *succ;
-			if(!_loop->contains(succBB)) continue;
+			//if(!_loop->contains(succBB)) continue;
 			buildEdge(inDag, dfsStack, currentNode, succBB);
 		}
 	}
 }
 
 void BL_DAG::buildEdge(BLBlockNodeMap& inDag, BLNodeStack& dfsStack, BL_Node* currentNode, BasicBlock* succBB) {
+	if(!_loop->contains(currentNode->getBlock())) return;
 	BL_Node* succNode = inDag[succBB];
 	
 	if(succNode && succNode->getColor() == BL_Node::BLACK) {
@@ -87,27 +89,45 @@ void BL_DAG::buildEdge(BLBlockNodeMap& inDag, BLNodeStack& dfsStack, BL_Node* cu
 
 void BL_DAG::insert_pseudoexit() {
 	BasicBlock* pseudoexit;
-	BL_Node* node;
-	BL_Edge* edge;
 	std::string ebname = "ps.exit";
 	unsigned number = 0;
+	//auto pref = "";
 	//Insert pseudo exit block first
 	for(auto block : _blocks) {
 		if(!_loop->isLoopExiting(block)) continue;
-		pseudoexit = BasicBlock::Create(_module->getContext(),ebname+std::to_string(number),_function);
-		pseudoexit->moveAfter(block);
-		node = createNode(pseudoexit);
-		edge = createEdge(_indag[block],node);
-		addNode(node);
-		addEdge(edge);
-		number++;
+		auto term = block->getTerminator();
+		for(unsigned idx = 0; idx<term->getNumSuccessors(); idx++) {
+			auto succ = term->getSuccessor(idx);
+			if(_loop->contains(succ)) continue;
+			pseudoexit = BasicBlock::Create(_module->getContext(),ebname+std::to_string(number),_function);
+			pseudoexit->moveAfter(block);
+
+			term->setSuccessor(idx,pseudoexit);
+			//outs() << "Old Block: " << block->getName() << ", Sucessor: ";
+			//pref = "";
+			//for(unsigned i = 0; i< term->getNumSuccessors(); i++) { outs() << pref << term->getSuccessor(i)->getName(); pref = ", "; }
+
+			auto br_inst = BranchInst::Create(succ,pseudoexit);
+			assert(br_inst->getNumSuccessors()==1);
+			//outs() << "\nNew Block: " << pseudoexit->getName() << ", Sucessor: " << br_inst->getSuccessor(0)->getName() << "\n";
+			number++;
+		}
 	}
-	pseudoexit = BasicBlock::Create(_module->getContext(),ebname+std::to_string(number),_function);
-	pseudoexit->moveAfter(_loop->getLoopLatch());
-	node = createNode(pseudoexit);
-	edge = createEdge(_indag[_loop->getLoopLatch()],node);
-	addNode(node);
-	addEdge(edge);
+	//assume one loop has only one latch
+	//can't insert now, loop header phi entries don't match predecessors
+	//auto latch = _loop->getLoopLatch();
+	//if(latch) {
+	//	pseudoexit = BasicBlock::Create(_module->getContext(),ebname+std::to_string(number),_function);
+	//	pseudoexit->moveAfter(latch);
+	//	_loop->addBlockEntry(pseudoexit);
+	//	auto term = latch->getTerminator();
+	//	assert(term->getNumSuccessors()==1);
+	//	term->setSuccessor(0,pseudoexit);
+	//	outs() << "Old Block: " << latch->getName() << ", Sucessor: " << term->getSuccessor(0)->getName() << "\n";
+	//	auto br_inst = BranchInst::Create(_loop->getHeader(),pseudoexit);
+	//	assert(br_inst->getNumSuccessors()==1);
+	//	outs() << "New Block: " << br_inst->getParent()->getName() << ", Sucessor: " << br_inst->getSuccessor(0)->getName() << "\n";
+	//}
 }
 
 void BL_DAG::build() {
@@ -192,41 +212,52 @@ void BL_DAG::topological_sort() {
 	_nodes.clear();
 	std::map<BL_Node*,bool> selected;
 
-	for(auto node:shadow)
+	for(auto node:shadow) {
+		outs() << node->getBlock()->getName() << " ";
 		selected[node] = false;
-
-	do {
-		for(auto node:shadow){
-			if(node->getNumberPredEdges()==0 && !selected[node]){
-				selected[node] = true;
-				S.push(node);
-			}
+	}
+	outs() << "\n";
+	for(auto node:shadow){
+		if(node->getNumberPredEdges()==0 && !selected[node]){
+			selected[node] = true;
+			S.push(node);
 		}
+	}
+
+	while(!S.empty()) {
 		BL_Node* current_node = S.front();
-		_nodes.push_back(current_node);
 		S.pop();
+		_nodes.push_back(current_node);
 		BL_Edge* edge;
-		for(auto node : shadow){
+		BLNodeVector shadow2(shadow);
+		outs() << "current node " << current_node->getBlock()->getName() << "\n";
+		for(auto nit = shadow.begin();nit!=shadow.end();nit++){
+			BL_Node* node = *nit;
+			outs() << "iter node " << node->getBlock()->getName() << "\n";
 			if(node==current_node) continue;
-			outs() << "remove edge!!!\n";
 			edge = existEdge(current_node,node);
 			if(edge){
-				outs() << "edge detected current to node\n";
+				outs() << "edge detected current to node " << node->getBlock()->getName() << "\n";
 				current_node->removeSuccEdge(edge);
 				node->removePredEdge(edge);
-				for(auto it=shadow.begin();it!=shadow.end();it++)
-					if((*it)==current_node) shadow.erase(it);
 			}
 			edge = existEdge(node,current_node);
 			if(edge){
 				outs() << "edge detected node to current\n";
 				current_node->removePredEdge(edge);
 				node->removeSuccEdge(edge);
-				for(auto it=shadow.begin();it!=shadow.end();it++)
-					if((*it)==current_node) shadow.erase(it);
 			}
-		}		
-	} while(!S.empty());
+			for(auto it=shadow2.begin();it!=shadow2.end();it++)
+				if((*it)==current_node) shadow2.erase(it);
+		}
+		for(auto node : shadow) {
+			if(node->getNumberPredEdges()==0 && !selected[node]){
+				selected[node] = true;
+				S.push(node);
+			}
+		}
+		shadow = shadow2;
+	}
 }
 
 void BL_DAG::calculatePathNumbers() {
@@ -245,11 +276,11 @@ bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 	inner[global_loop_id++] = true;
 
 	//2. build dag with all BB within this loop
+	dag->insert_pseudoexit();
 	dag->build();
-	//dag->insert_pseudoexit();
 
 	//3. topological_sort
-	//dag->topological_sort();
+	dag->topological_sort();
 
 	//4. calculate and assign edge value
 	dag->calculatePathNumbers();
@@ -260,7 +291,7 @@ bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 	//5. instruement [r+=weight(e)] at CHORD edge
 	//6. instrument [count[loopid,r]++] at latch
 
-	return false;
+	return true;
 
 	//Module *M = L->getPreheader()->getParent()->getParent() ;
 	//Constant *PrintFunc;
