@@ -205,63 +205,47 @@ BL_Edge* BL_DAG::existEdge(BL_Node* source, BL_Node* target) {
 	return NULL;
 }
 
-void BL_DAG::topological_sort() {
-	//Stack storing "no incoming edge" node
-	BLNodeQueue S;
-	BLNodeVector shadow(_nodes);
-	_nodes.clear();
-	std::map<BL_Node*,bool> selected;
+void BL_DAG::topologicalSortUtil(BL_Node* node, std::map<BL_Node*,bool>& visited, BLNodeStack &Stack)
+{
+	visited[node] = true;
+	
+	for (auto adj = node->succBegin(); adj!=node->succEnd(); ++adj)
+	    if (!visited[(*adj)->getTarget()])
+	        topologicalSortUtil((*adj)->getTarget(), visited, Stack);
+	
+	Stack.push(node);
+}
 
-	for(auto node:shadow) {
+void BL_DAG::topological_sort() {
+	BLNodeStack Stack;
+	std::map<BL_Node*,bool> visited;
+	outs() << "[Debug] Topological Sorting: ";
+	for(auto node:_nodes) {
 		outs() << node->getBlock()->getName() << " ";
-		selected[node] = false;
+		visited[node] = false;
 	}
 	outs() << "\n";
-	for(auto node:shadow){
-		if(node->getNumberPredEdges()==0 && !selected[node]){
-			selected[node] = true;
-			S.push(node);
-		}
+	for (auto node:_nodes) {
+		if (visited[node] == false)
+			topologicalSortUtil(node, visited, Stack);
 	}
-
-	while(!S.empty()) {
-		BL_Node* current_node = S.front();
-		S.pop();
-		_nodes.push_back(current_node);
-		BL_Edge* edge;
-		BLNodeVector shadow2(shadow);
-		outs() << "current node " << current_node->getBlock()->getName() << "\n";
-		for(auto nit = shadow.begin();nit!=shadow.end();nit++){
-			BL_Node* node = *nit;
-			outs() << "iter node " << node->getBlock()->getName() << "\n";
-			if(node==current_node) continue;
-			edge = existEdge(current_node,node);
-			if(edge){
-				outs() << "edge detected current to node " << node->getBlock()->getName() << "\n";
-				current_node->removeSuccEdge(edge);
-				node->removePredEdge(edge);
-			}
-			edge = existEdge(node,current_node);
-			if(edge){
-				outs() << "edge detected node to current\n";
-				current_node->removePredEdge(edge);
-				node->removeSuccEdge(edge);
-			}
-			for(auto it=shadow2.begin();it!=shadow2.end();it++)
-				if((*it)==current_node) shadow2.erase(it);
-		}
-		for(auto node : shadow) {
-			if(node->getNumberPredEdges()==0 && !selected[node]){
-				selected[node] = true;
-				S.push(node);
-			}
-		}
-		shadow = shadow2;
+	_nodes.clear();
+	outs() << "[Debug] Sorted NodeList: ";
+	while(!Stack.empty())
+	{
+		outs() << Stack.top()->getBlock()->getName() << " ";
+		_nodes.push_back(Stack.top());
+		Stack.pop();
 	}
+	outs() << "\n";
 }
 
 void BL_DAG::calculatePathNumbers() {
-
+	outs() << "[Debug] Test Reverse Iter: ";
+	for(auto rit = rbegin(); rit!=rend(); rit++) {
+		outs() << (*rit)->getBlock()->getName() << " ";
+	}
+	outs() << "\n";
 }
 
 bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)

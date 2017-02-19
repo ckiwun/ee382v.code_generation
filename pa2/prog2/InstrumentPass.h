@@ -155,6 +155,7 @@ public:
 	BLNode_riter rend() {return _nodes.rend();}
 
 private:
+	void topologicalSortUtil(BL_Node* node, std::map<BL_Node*,bool>& visited, BLNodeStack &Stack);
 	BL_Edge* existEdge(BL_Node*, BL_Node*);
 	BL_Node* createNode(BasicBlock* BB) {
 		BL_Node* node = new BL_Node(BB);
