@@ -16,6 +16,7 @@
 #include <stack>
 #include <unordered_set>
 #include <unordered_map>
+#include <string>
 
 namespace ee382v
 {
@@ -55,6 +56,7 @@ public:
 private:
 	static int global_loop_id;
 	std::map<int,bool> inner;
+	std::map<int,std::string> route;
 
 };
 
@@ -159,6 +161,7 @@ public:
 
 private:
 	void topologicalSortUtil(BL_Node* node, std::map<BL_Node*,bool>& visited, BLNodeStack &Stack);
+	void traverseRouteUtil(BL_Node* node, std::map<BL_Node*,bool>& visited, unsigned path_val);
 	BL_Edge* existEdge(BL_Node*, BL_Node*);
 	BL_Node* createNode(BasicBlock* BB) {
 		BL_Node* node = new BL_Node(BB);

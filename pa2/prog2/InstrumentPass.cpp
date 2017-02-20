@@ -15,8 +15,6 @@
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/DerivedTypes.h"
 
-#include <string>
-
 using namespace ee382v;
 using namespace llvm;
 
@@ -93,7 +91,6 @@ void BL_DAG::insert_pseudoexit() {
 	BasicBlock* pseudoexit;
 	std::string ebname = "ps.exit";
 	unsigned number = 0;
-	//auto pref = "";
 	//Insert pseudo exit block first
 	for(auto block : _blocks) {
 		if(!_loop->isLoopExiting(block)) continue;
@@ -105,30 +102,11 @@ void BL_DAG::insert_pseudoexit() {
 			pseudoexit->moveAfter(block);
 
 			term->setSuccessor(idx,pseudoexit);
-			//outs() << "Old Block: " << block->getName() << ", Sucessor: ";
-			//pref = "";
-			//for(unsigned i = 0; i< term->getNumSuccessors(); i++) { outs() << pref << term->getSuccessor(i)->getName(); pref = ", "; }
 			auto br_inst = BranchInst::Create(succ,pseudoexit);
 			assert(br_inst->getNumSuccessors()==1);
-			//outs() << "\nNew Block: " << pseudoexit->getName() << ", Sucessor: " << br_inst->getSuccessor(0)->getName() << "\n";
 			number++;
 		}
 	}
-	//assume one loop has only one latch
-	//can't insert now, loop header phi entries don't match predecessors
-	//auto latch = _loop->getLoopLatch();
-	//if(latch) {
-	//	pseudoexit = BasicBlock::Create(_module->getContext(),ebname+std::to_string(number),_function);
-	//	pseudoexit->moveAfter(latch);
-	//	_loop->addBlockEntry(pseudoexit);
-	//	auto term = latch->getTerminator();
-	//	assert(term->getNumSuccessors()==1);
-	//	term->setSuccessor(0,pseudoexit);
-	//	outs() << "Old Block: " << latch->getName() << ", Sucessor: " << term->getSuccessor(0)->getName() << "\n";
-	//	auto br_inst = BranchInst::Create(_loop->getHeader(),pseudoexit);
-	//	assert(br_inst->getNumSuccessors()==1);
-	//	outs() << "New Block: " << br_inst->getParent()->getName() << ", Sucessor: " << br_inst->getSuccessor(0)->getName() << "\n";
-	//}
 }
 
 void BL_DAG::build() {
@@ -214,8 +192,8 @@ void BL_DAG::topologicalSortUtil(BL_Node* node, std::map<BL_Node*,bool>& visited
 	visited[node] = true;
 	
 	for (auto adj = node->succBegin(); adj!=node->succEnd(); ++adj)
-	    if (!visited[(*adj)->getTarget()])
-	        topologicalSortUtil((*adj)->getTarget(), visited, Stack);
+		if (!visited[(*adj)->getTarget()])
+			topologicalSortUtil((*adj)->getTarget(), visited, Stack);
 	
 	Stack.push(node);
 }
@@ -242,6 +220,8 @@ void BL_DAG::topological_sort() {
 		Stack.pop();
 	}
 	outs() << "\n";
+	outs() << "[Debug] Calculate Route Info... ";
+		//TODO
 }
 
 void BL_DAG::calculatePathNumbers() {
@@ -330,7 +310,6 @@ void BL_DAG::instrumentation() {
 bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 {
 	BL_DAG* dag = new BL_DAG(loop,global_loop_id);
-	//1. mark inner[loopid] false if not inner most loop
 	if(!loop->getSubLoops().empty()) {
 		inner[global_loop_id++] = false;
 		dag->printInfo(false);
@@ -338,42 +317,20 @@ bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 	}
 	inner[global_loop_id++] = true;
 
-	//2. build dag with all BB within this loop
 	dag->insert_pseudoexit();
 	dag->build();
 
-	//3. topological_sort
 	dag->topological_sort();
 
-	//4. calculate and assign edge value
 	dag->calculatePathNumbers();
 	dag->printInfo(true);
 
-	//5. instruement [r+=weight(e)] at CHORD edge
 	dag->instrumentation();
 
-	//6. instrument [count[loopid,r]++] at latch
-
 	return true;
-
-	//LoopInfo& loopInfo = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
-	//DominatorTree& domTree = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-	//DomTreeNode *node = domTree.getNode(loop->getHeader());
-	//FunctionType *FunTy = FunctionType::get( Type::getVoidTy( MP->getContext() ), ... );
-	//Function *Function = dyn_cast<Function> ( MP->getOrInsertFunction(...) );
-	//APInt LoopId(...);
-	//Value *init_arg_values[] = { Constant::getIntegerValue(...), ... };
-	//CallInst *call = CallInst::Create(...);
-	//call->insertBefore(???->getFirstNonPHI());
-	//call->insertBefore(latch->getTerminator());
 }
 
 bool InstrumentPass::doFinalization() {
-	//auto pref = "";
-	//for(int i=0;i<global_loop_id;i++) {
-	//	outs() << pref << inner[i];
-	//	pref = ", ";
-	//}
 	outs() << "\nFinish Instruementation!\n";
 	return false;
 }
