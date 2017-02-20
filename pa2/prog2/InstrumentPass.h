@@ -48,6 +48,7 @@ public:
 
 	bool runOnLoop(Loop*, llvm::LPPassManager&);
 	bool doFinalization();
+	int getLoopID() {return global_loop_id;}
 
 	void getAnalysisUsage(llvm::AnalysisUsage &AU) const;
 
@@ -138,12 +139,14 @@ public:
 	void build();
 	void insert_pseudoexit();
 	void topological_sort();
+	void instrumentation();
 	void calculatePathNumbers();
 
 	//Accessors
 	BL_Node* getEntry() const {return _entry;}
 	BL_Node* getExit() const {return _exit;}
 	Loop* getLoop() const {return _loop;}
+	Module* getModule() const {return _module;}
 	unsigned getLoopID() const {return _loopid;}
 	int getNumberOfPaths() const {return _npath;}
 	void printInfo(bool);

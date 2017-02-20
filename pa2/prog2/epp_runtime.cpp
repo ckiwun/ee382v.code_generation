@@ -5,18 +5,24 @@
 
 using namespace std;
 
-#define VEC_SIZE 1000
-
 static map<int,vector<int>> count;
 static map<int,int> r;
+static map<int,bool> visited;
+static int test = 0;
+
+void printTest(int loopId, int whatever) {
+	cout << "Loop ID from external: " << loopId << endl;
+}
 
 void init_path_reg(int loopId) {
 	//this method should be instrumented at first nonphi of each for loop
 	//assume each loop only call this one time
-	cout << "initial" << endl;
-	vector<int> path_count(VEC_SIZE);
-	count[loopId] = path_count;
 	r[loopId] = 0;
+	if(visited[loopId]) return;
+	cout << "initial" << endl;
+	visited[loopId] = true;
+	vector<int> path_count(8);
+	count[loopId] = path_count;
 }
 
 void inc_path_reg(int loopId, int val) {
@@ -33,14 +39,14 @@ void finalize_path_reg(int loopId) {
 
 void dump_path_regs() {
 	cout << "dump" << endl;
+	cout << count.size() << endl;
 	for(auto obj:count) {
-		cout << "Number " << obj.first << ", ";
-		auto pref = "";
+		cout << "[Loop #" << obj.first << "]" << endl;
+		unsigned path_count = 0;
 		for(auto it:obj.second) {
-			cout << pref << it;
-			pref = ", ";
+			cout << "[Path #" << path_count << "] " << it << endl;
+			path_count++;
 		}
-		cout << endl;
 	}
 }
 

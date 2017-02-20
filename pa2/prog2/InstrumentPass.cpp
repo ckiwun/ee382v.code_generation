@@ -1,6 +1,7 @@
 #define DEBUG_TYPE "InstrumentPass"
 
 #include "InstrumentPass.h"
+#include "epp_runtime.h"
 
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/SmallVector.h"
@@ -12,6 +13,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/DerivedTypes.h"
 
 #include <string>
 
@@ -106,7 +108,6 @@ void BL_DAG::insert_pseudoexit() {
 			//outs() << "Old Block: " << block->getName() << ", Sucessor: ";
 			//pref = "";
 			//for(unsigned i = 0; i< term->getNumSuccessors(); i++) { outs() << pref << term->getSuccessor(i)->getName(); pref = ", "; }
-
 			auto br_inst = BranchInst::Create(succ,pseudoexit);
 			assert(br_inst->getNumSuccessors()==1);
 			//outs() << "\nNew Block: " << pseudoexit->getName() << ", Sucessor: " << br_inst->getSuccessor(0)->getName() << "\n";
@@ -260,6 +261,72 @@ void BL_DAG::calculatePathNumbers() {
 	outs() << "\n";
 }
 
+void BL_DAG::instrumentation() {
+	//init_path_reg
+	Function* init_path = cast<Function>(getModule()->getOrInsertFunction("init_path_reg", Type::getVoidTy(getModule()->getContext()), IntegerType::get(getModule()->getContext(),32) ,NULL));
+	Value* init_path_arg= Constant::getIntegerValue(IntegerType::get(getModule()->getContext(),32),APInt(32,getLoopID()));
+	CallInst* init_path_call = CallInst::Create(init_path,init_path_arg);
+	BasicBlock* loopheader = getLoop()->getHeader();
+	init_path_call->insertBefore(loopheader->getFirstNonPHI());
+
+	//inc_path_reg
+	std::string edgename("edge");
+	unsigned number = 0;
+	//insert on edge between exiting block and pseudo exit, need to create a new basic block between
+	Function* inc_path = cast<Function>(getModule()->getOrInsertFunction("inc_path_reg", Type::getVoidTy(getModule()->getContext()), IntegerType::get(getModule()->getContext(),32), IntegerType::get(getModule()->getContext(),32) ,NULL));
+	for(auto edge : _edges) {
+		if(!edge->getWeight()) continue;
+		//insert new basic block along the edge
+		BasicBlock* source = edge->getSource()->getBlock();
+		BasicBlock* target = edge->getTarget()->getBlock();
+		auto source_term = source->getTerminator();
+		for(unsigned idx = 0; idx<source_term->getNumSuccessors(); idx++) {
+			auto succ = source_term->getSuccessor(idx);
+			if(_loop->contains(succ)) continue;
+			if(target!=succ) continue;
+			BasicBlock* edgeblock = BasicBlock::Create(_module->getContext(),edgename+std::to_string(number++),_function,succ);
+			//edgeblock->moveAfter(source);
+			source_term->setSuccessor(idx,edgeblock);
+			BranchInst::Create(succ,edgeblock);
+			Value* inc_path_arg[]= {Constant::getIntegerValue(IntegerType::get(getModule()->getContext(),32),APInt(32,getLoopID())),Constant::getIntegerValue(IntegerType::get(getModule()->getContext(),32),APInt(32,edge->getWeight()))};
+			CallInst* inc_path_call = CallInst::Create(inc_path,inc_path_arg);
+			inc_path_call->insertBefore(edgeblock->getTerminator());
+		}
+	}
+	//insert on in-loop edge
+	for(auto edge : _edges) {
+		if(!edge->getWeight()) continue;
+		//insert new basic block along the edge
+		BasicBlock* source = edge->getSource()->getBlock();
+		BasicBlock* target = edge->getTarget()->getBlock();
+		auto source_term = source->getTerminator();
+		for(unsigned idx = 0; idx<source_term->getNumSuccessors(); idx++) {
+			auto succ = source_term->getSuccessor(idx);
+			if(target!=succ) continue;
+			BasicBlock* edgeblock = BasicBlock::Create(_module->getContext(),edgename+std::to_string(number++),_function,target);
+			_loop->addBlockEntry(edgeblock);
+			source_term->setSuccessor(idx,edgeblock);
+			BranchInst::Create(succ,edgeblock);
+			Value* inc_path_arg[]= {Constant::getIntegerValue(IntegerType::get(getModule()->getContext(),32),APInt(32,getLoopID())),Constant::getIntegerValue(IntegerType::get(getModule()->getContext(),32),APInt(32,edge->getWeight()))};
+			CallInst* inc_path_call = CallInst::Create(inc_path,inc_path_arg);
+			inc_path_call->insertBefore(edgeblock->getTerminator());
+		}
+	}
+	//finalize_path_reg
+	Function* finalize_path = cast<Function>(getModule()->getOrInsertFunction("finalize_path_reg", Type::getVoidTy(getModule()->getContext()), IntegerType::get(getModule()->getContext(),32) ,NULL));
+	Value* finalize_path_arg= Constant::getIntegerValue(IntegerType::get(getModule()->getContext(),32),APInt(32,getLoopID()));
+	CallInst* finalize_path_call = CallInst::Create(finalize_path,finalize_path_arg);
+	BasicBlock* latch = getLoop()->getLoopLatch();
+	finalize_path_call->insertBefore(latch->getTerminator());
+	for(auto node : _nodes) {
+		auto block = node->getBlock();
+		std::string blockname = block->getName().substr(0,7);
+		if(blockname!="ps.exit") continue;
+		CallInst* finalize_path_call = CallInst::Create(finalize_path,finalize_path_arg);
+		finalize_path_call->insertBefore(block->getTerminator());
+	}
+}
+
 bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 {
 	BL_DAG* dag = new BL_DAG(loop,global_loop_id);
@@ -282,9 +349,9 @@ bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 	dag->calculatePathNumbers();
 	dag->printInfo(true);
 
-	//optimization (optional)
-
 	//5. instruement [r+=weight(e)] at CHORD edge
+	dag->instrumentation();
+
 	//6. instrument [count[loopid,r]++] at latch
 
 	return true;
