@@ -189,10 +189,13 @@ void BL_DAG::printInfo(bool is_inner) {
 
 	//Where inc_reg should be instrumented
 	outs() << "\n[Info] NonZeroEdge: ";
+	pref = "";
 	for(auto edge : _edges) {
 		if(!edge->getWeight()) continue;
-		outs() << edge->getSource()->getBlock()->getName() << " => ";
-		outs() << edge->getTarget()->getBlock()->getName() << ", ";
+		outs() << pref << edge->getSource()->getBlock()->getName() << " => ";
+		outs() << edge->getTarget()->getBlock()->getName();
+		outs() << "(" << edge->getWeight() << ")";
+		pref = ", ";
 	}
 	outs() << "\n";
 }
@@ -243,7 +246,16 @@ void BL_DAG::topological_sort() {
 void BL_DAG::calculatePathNumbers() {
 	outs() << "[Debug] Test Reverse Iter: ";
 	for(auto rit = rbegin(); rit!=rend(); rit++) {
-		outs() << (*rit)->getBlock()->getName() << " ";
+		outs() << (*rit)->getBlock()->getName() << "(" << (*rit)->getNumberSuccEdges() << ") ";
+		if((*rit)->getNumberSuccEdges()==0) {
+			(*rit)->setNumberPaths(1);
+			continue;
+		}
+		(*rit)->setNumberPaths(0);
+		for(auto iter=(*rit)->succBegin();iter!=(*rit)->succEnd();iter++) {
+			(*iter)->setWeight((*rit)->getNumberPaths());
+			(*rit)->setNumberPaths((*rit)->getNumberPaths()+(*iter)->getTarget()->getNumberPaths());
+		}
 	}
 	outs() << "\n";
 }
@@ -277,10 +289,6 @@ bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 
 	return true;
 
-	//Module *M = L->getPreheader()->getParent()->getParent() ;
-	//Constant *PrintFunc;
-	//PrintFunc = M->getOrInsertFunction("Print", Type::getVoidTy(M->getContext()), (Type*)0);
-	//FPrint= cast<Function>(PrintFunc);//Fprint is Function *Fprint defined in Mypass;
 	//LoopInfo& loopInfo = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
 	//DominatorTree& domTree = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
 	//DomTreeNode *node = domTree.getNode(loop->getHeader());
