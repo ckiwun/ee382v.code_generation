@@ -90,7 +90,7 @@ void BL_DAG::buildEdge(BLBlockNodeMap& inDag, BLNodeStack& dfsStack, BL_Node* cu
 void BL_DAG::insert_pseudoexit() {
 	BasicBlock* pseudoexit;
 	std::string ebname = "ps.exit";
-	unsigned number = 0;
+	static unsigned number = 0;
 	//Insert pseudo exit block first
 	for(auto block : _blocks) {
 		if(!_loop->isLoopExiting(block)) continue;
@@ -99,6 +99,11 @@ void BL_DAG::insert_pseudoexit() {
 			auto succ = term->getSuccessor(idx);
 			if(_loop->contains(succ)) continue;
 			pseudoexit = BasicBlock::Create(_module->getContext(),ebname+std::to_string(number),_function);
+			auto ploop = _loop->getParentLoop();
+			while(ploop) {
+				ploop->addBlockEntry(pseudoexit);
+				ploop = ploop->getParentLoop();
+			}
 			pseudoexit->moveAfter(block);
 
 			term->setSuccessor(idx,pseudoexit);
@@ -129,7 +134,7 @@ void BL_DAG::printInfo(bool is_inner) {
 		outs() << ", Innermost Loop]";
 	}
 	else {
-		outs() << ", Outer Loop]";
+		outs() << ", Outer Loop]\n";
 		return;
 	}
 
@@ -155,19 +160,19 @@ void BL_DAG::printInfo(bool is_inner) {
 	pref = "";
 	//Where finalize_reg should be instrumented
 	//Insert pseudo exit block first
-	outs() << "[Info] ExitingBlocks: ";
-	for(auto block : _blocks) {
-		if(!_loop->isLoopExiting(block)) continue;
-		outs() << pref << block->getName();
-		pref = ", ";
-	}
-	outs() << "\n[Info] Latch: " << _loop->getLoopLatch()->getName();
+	//outs() << "[Info] ExitingBlocks: ";
+	//for(auto block : _blocks) {
+	//	if(!_loop->isLoopExiting(block)) continue;
+	//	outs() << pref << block->getName();
+	//	pref = ", ";
+	//}
+	//outs() << "\n[Info] Latch: " << _loop->getLoopLatch()->getName();
 
 	//Where init_reg should be instrumented
-	outs() << "\n[Info] FirstNonPhi: " << _loop->getHeader()->getFirstNonPHI()->getName();
+	//outs() << "\n[Info] FirstNonPhi: " << _loop->getHeader()->getFirstNonPHI()->getName();
 
 	//Where inc_reg should be instrumented
-	outs() << "\n[Info] NonZeroEdge: ";
+	outs() << "[Info] NonZeroEdge: ";
 	pref = "";
 	for(auto edge : _edges) {
 		if(!edge->getWeight()) continue;
@@ -201,33 +206,33 @@ void BL_DAG::topologicalSortUtil(BL_Node* node, std::map<BL_Node*,bool>& visited
 void BL_DAG::topological_sort() {
 	BLNodeStack Stack;
 	std::map<BL_Node*,bool> visited;
-	outs() << "[Debug] Topological Sorting: ";
-	for(auto node:_nodes) {
-		outs() << node->getBlock()->getName() << " ";
-		visited[node] = false;
-	}
-	outs() << "\n";
+	//outs() << "[Debug] Topological Sorting: ";
+	//for(auto node:_nodes) {
+	//	outs() << node->getBlock()->getName() << " ";
+	//	visited[node] = false;
+	//}
+	//outs() << "\n";
 	for (auto node:_nodes) {
 		if (visited[node] == false)
 			topologicalSortUtil(node, visited, Stack);
 	}
 	_nodes.clear();
-	outs() << "[Debug] Sorted NodeList: ";
+	//outs() << "[Debug] Sorted NodeList: ";
 	while(!Stack.empty())
 	{
-		outs() << Stack.top()->getBlock()->getName() << " ";
+		//outs() << Stack.top()->getBlock()->getName() << " ";
 		_nodes.push_back(Stack.top());
 		Stack.pop();
 	}
 	outs() << "\n";
-	outs() << "[Debug] Calculate Route Info... ";
+	//outs() << "[Debug] Calculate Route Info... \n";
 		//TODO
 }
 
 void BL_DAG::calculatePathNumbers() {
-	outs() << "[Debug] Test Reverse Iter: ";
+	//outs() << "[Debug] Test Reverse Iter: ";
 	for(auto rit = rbegin(); rit!=rend(); rit++) {
-		outs() << (*rit)->getBlock()->getName() << "(" << (*rit)->getNumberSuccEdges() << ") ";
+		//outs() << (*rit)->getBlock()->getName() << "(" << (*rit)->getNumberSuccEdges() << ") ";
 		if((*rit)->getNumberSuccEdges()==0) {
 			(*rit)->setNumberPaths(1);
 			continue;
@@ -265,7 +270,11 @@ void BL_DAG::instrumentation() {
 			if(_loop->contains(succ)) continue;
 			if(target!=succ) continue;
 			BasicBlock* edgeblock = BasicBlock::Create(_module->getContext(),edgename+std::to_string(number++),_function,succ);
-			//edgeblock->moveAfter(source);
+			auto ploop = _loop->getParentLoop();
+			while(ploop) {
+				ploop->addBlockEntry(edgeblock);
+				ploop = ploop->getParentLoop();
+			}
 			source_term->setSuccessor(idx,edgeblock);
 			BranchInst::Create(succ,edgeblock);
 			Value* inc_path_arg[]= {Constant::getIntegerValue(IntegerType::get(getModule()->getContext(),32),APInt(32,getLoopID())),Constant::getIntegerValue(IntegerType::get(getModule()->getContext(),32),APInt(32,edge->getWeight()))};
@@ -285,6 +294,11 @@ void BL_DAG::instrumentation() {
 			if(target!=succ) continue;
 			BasicBlock* edgeblock = BasicBlock::Create(_module->getContext(),edgename+std::to_string(number++),_function,target);
 			_loop->addBlockEntry(edgeblock);
+			auto ploop = _loop->getParentLoop();
+			while(ploop) {
+				ploop->addBlockEntry(edgeblock);
+				ploop = ploop->getParentLoop();
+			}
 			source_term->setSuccessor(idx,edgeblock);
 			BranchInst::Create(succ,edgeblock);
 			Value* inc_path_arg[]= {Constant::getIntegerValue(IntegerType::get(getModule()->getContext(),32),APInt(32,getLoopID())),Constant::getIntegerValue(IntegerType::get(getModule()->getContext(),32),APInt(32,edge->getWeight()))};
