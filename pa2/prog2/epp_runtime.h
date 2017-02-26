@@ -6,5 +6,6 @@ extern "C" void inc_path_reg(int loopId, int val);
 extern "C" void finalize_path_reg(int loopId);
 extern "C" void dump_path_regs();
 extern "C" void printTest(int,int);
+extern "C" void update_route(int,int,char*);
 
 #endif

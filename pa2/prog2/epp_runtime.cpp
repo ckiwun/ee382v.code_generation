@@ -34,12 +34,16 @@ void finalize_path_reg(int loopId) {
 	r[loopId]=0;
 }
 
+void update_route(int loopId,int pathId,char* test) {
+	string str_test(test);
+	cout << "[TESTING!!!] " << loopId << " " << pathId << " " << str_test << endl;
+}
+
 void dump_path_regs() {
-	for(auto obj:count) {
-		cout << "[Loop #" << obj.first << "]" << endl;
-		for(auto it:obj.second) {
-			cout << "[Path #" << it.first << "] " << it.second << endl;
-		}
+	cout << "LoopID  PathID  PathInfo" << endl;
+	for(auto loop:count)
+	for(auto path:loop.second) {
+		cout << loop.first << "       " << path.first << "       " << path.second << endl;
 	}
 }
 

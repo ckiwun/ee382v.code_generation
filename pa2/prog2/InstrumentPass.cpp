@@ -14,6 +14,7 @@
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Type.h"
 
 using namespace ee382v;
 using namespace llvm;
@@ -89,7 +90,7 @@ void BL_DAG::buildEdge(BLBlockNodeMap& inDag, BLNodeStack& dfsStack, BL_Node* cu
 
 void BL_DAG::insert_pseudoexit() {
 	BasicBlock* pseudoexit;
-	std::string ebname = "ps.exit";
+	std::string ebname = "exit";
 	static unsigned number = 0;
 	//Insert pseudo exit block first
 	for(auto block : _blocks) {
@@ -206,33 +207,20 @@ void BL_DAG::topologicalSortUtil(BL_Node* node, std::map<BL_Node*,bool>& visited
 void BL_DAG::topological_sort() {
 	BLNodeStack Stack;
 	std::map<BL_Node*,bool> visited;
-	//outs() << "[Debug] Topological Sorting: ";
-	//for(auto node:_nodes) {
-	//	outs() << node->getBlock()->getName() << " ";
-	//	visited[node] = false;
-	//}
-	//outs() << "\n";
 	for (auto node:_nodes) {
 		if (visited[node] == false)
 			topologicalSortUtil(node, visited, Stack);
 	}
 	_nodes.clear();
-	//outs() << "[Debug] Sorted NodeList: ";
 	while(!Stack.empty())
 	{
-		//outs() << Stack.top()->getBlock()->getName() << " ";
 		_nodes.push_back(Stack.top());
 		Stack.pop();
 	}
-	outs() << "\n";
-	//outs() << "[Debug] Calculate Route Info... \n";
-		//TODO
 }
 
 void BL_DAG::calculatePathNumbers() {
-	//outs() << "[Debug] Test Reverse Iter: ";
 	for(auto rit = rbegin(); rit!=rend(); rit++) {
-		//outs() << (*rit)->getBlock()->getName() << "(" << (*rit)->getNumberSuccEdges() << ") ";
 		if((*rit)->getNumberSuccEdges()==0) {
 			(*rit)->setNumberPaths(1);
 			continue;
@@ -243,7 +231,59 @@ void BL_DAG::calculatePathNumbers() {
 			(*rit)->setNumberPaths((*rit)->getNumberPaths()+(*iter)->getTarget()->getNumberPaths());
 		}
 	}
-	outs() << "\n";
+}
+void BL_DAG::calculateRouteInfo() {
+	SmallVector<BasicBlock*,8> latches;
+	_loop->getLoopLatches(latches);
+	for(auto latch:latches){
+		printAllPaths(_indag[_loop->getHeader()],_indag[latch]);
+	}
+	for(auto node : _nodes) {
+		auto block = node->getBlock();
+		std::string blockname = block->getName().substr(0,4);
+		if(blockname!="exit") continue;
+		printAllPaths(_indag[_loop->getHeader()],_indag[block]);
+	}
+}
+
+void BL_DAG::printAllPaths(BL_Node* s, BL_Node* d) {
+	std::map<BL_Node*,bool> visited;
+	std::vector<std::string> path;
+
+	for (auto node:_nodes)
+		visited[node] = false;
+
+	printAllPathsUtil(s, d, visited, path, 0);
+}
+
+void BL_DAG::printAllPathsUtil(BL_Node* u, BL_Node* d, std::map<BL_Node*,bool> visited, std::vector<std::string> path, unsigned path_val) {
+	visited[u] = true;
+	path.push_back(u->getBlock()->getName());
+	
+	if (u == d)
+	{
+		std::string fpath;
+		auto pref="";
+		for(auto str:path) {
+			fpath+=pref;
+			fpath+=str;
+			pref = "<=";
+		}
+		_parent->route[_loopid][path_val] = fpath;
+		//outs() << fpath;
+		//outs() << "(" << path_val << ")";
+		//outs() << "\n";
+	}
+	else
+	{
+		for (auto adj = u->succBegin(); adj!=u->succEnd(); ++adj) {
+			if (!visited[(*adj)->getTarget()])
+				printAllPathsUtil((*adj)->getTarget(), d, visited, path, path_val+(*adj)->getWeight());
+		}
+	}
+	
+	path.pop_back();
+	visited[u] = false;
 }
 
 void BL_DAG::instrumentation() {
@@ -310,12 +350,15 @@ void BL_DAG::instrumentation() {
 	Function* finalize_path = cast<Function>(getModule()->getOrInsertFunction("finalize_path_reg", Type::getVoidTy(getModule()->getContext()), IntegerType::get(getModule()->getContext(),32) ,NULL));
 	Value* finalize_path_arg= Constant::getIntegerValue(IntegerType::get(getModule()->getContext(),32),APInt(32,getLoopID()));
 	CallInst* finalize_path_call = CallInst::Create(finalize_path,finalize_path_arg);
-	BasicBlock* latch = getLoop()->getLoopLatch();
-	finalize_path_call->insertBefore(latch->getTerminator());
+	SmallVector<BasicBlock*,8> latches;
+	_loop->getLoopLatches(latches);
+	for(auto latch:latches){
+		finalize_path_call->insertBefore(latch->getTerminator());
+	}
 	for(auto node : _nodes) {
 		auto block = node->getBlock();
-		std::string blockname = block->getName().substr(0,7);
-		if(blockname!="ps.exit") continue;
+		std::string blockname = block->getName().substr(0,4);
+		if(blockname!="exit") continue;
 		CallInst* finalize_path_call = CallInst::Create(finalize_path,finalize_path_arg);
 		finalize_path_call->insertBefore(block->getTerminator());
 	}
@@ -323,21 +366,20 @@ void BL_DAG::instrumentation() {
 
 bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 {
-	BL_DAG* dag = new BL_DAG(loop,global_loop_id);
+	BL_DAG* dag = new BL_DAG(loop,global_loop_id++,this);
 	if(!loop->getSubLoops().empty()) {
-		inner[global_loop_id++] = false;
-		dag->printInfo(false);
+		//dag->printInfo(false);
 		return false;
 	}
-	inner[global_loop_id++] = true;
 
 	dag->insert_pseudoexit();
 	dag->build();
 
 	dag->topological_sort();
-
 	dag->calculatePathNumbers();
-	dag->printInfo(true);
+	dag->calculateRouteInfo();
+
+	//dag->printInfo(true);
 
 	dag->instrumentation();
 
@@ -345,7 +387,11 @@ bool InstrumentPass::runOnLoop(llvm::Loop* loop, llvm::LPPassManager& lpm)
 }
 
 bool InstrumentPass::doFinalization() {
-	outs() << "\nFinish Instruementation!\n";
+	outs() << "LoopID  PathID  PathInfo\n";
+	for(auto loop:route)
+	for(auto path:loop.second)
+		outs() << loop.first << "       " << path.first << "       " << path.second << "\n";
+
 	return false;
 }
 

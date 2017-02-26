@@ -55,8 +55,9 @@ public:
 
 private:
 	static int global_loop_id;
-	std::map<int,bool> inner;
-	std::map<int,std::string> route;
+	std::map<unsigned,std::map<unsigned,std::string>> route;
+
+	friend class BL_DAG;
 
 };
 
@@ -128,11 +129,12 @@ private:
 
 class BL_DAG {
 public:
-	BL_DAG(Loop* loop, unsigned loopid)
+	BL_DAG(Loop* loop, unsigned loopid, InstrumentPass* parent)
 	: _entry(NULL), _exit(NULL), _loop(loop), _loopid(loopid), _npath(-1) {
 		_function = _loop->getHeader()->getParent();
 		_module = _function->getParent();
 		_blocks = _loop->getBlocks();
+		_parent = parent;
 	}
 	//remember to release all memory
 	~BL_DAG();
@@ -141,8 +143,9 @@ public:
 	void build();
 	void insert_pseudoexit();
 	void topological_sort();
-	void instrumentation();
 	void calculatePathNumbers();
+	void calculateRouteInfo();
+	void instrumentation();
 
 	//Accessors
 	BL_Node* getEntry() const {return _entry;}
@@ -161,6 +164,8 @@ public:
 
 private:
 	void topologicalSortUtil(BL_Node* node, std::map<BL_Node*,bool>& visited, BLNodeStack &Stack);
+	void printAllPaths(BL_Node* s, BL_Node* d);
+	void printAllPathsUtil(BL_Node* u, BL_Node* d, std::map<BL_Node*,bool> visited, std::vector<std::string> path, unsigned);
 	void traverseRouteUtil(BL_Node* node, std::map<BL_Node*,bool>& visited, unsigned path_val);
 	BL_Edge* existEdge(BL_Node*, BL_Node*);
 	BL_Node* createNode(BasicBlock* BB) {
@@ -192,6 +197,7 @@ private:
 	Loop* _loop;
 	Function* _function;
 	Module* _module;
+	InstrumentPass* _parent;
 	unsigned _loopid;
 	int _npath;
 };
