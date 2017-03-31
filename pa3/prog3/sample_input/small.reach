@@ -1,0 +1,23 @@
+
+******  DataFlow Result for function small  ******
+{ s }
+entry:
+  %mul = mul nsw i32 %s, %s
+  %div = sdiv i32 %mul, 2
+  %cmp = icmp sgt i32 %s, 0
+  br i1 %cmp, label %if.then, label %if.end
+{ cmp mul div s }
+---
+{ s div mul cmp }
+if.then:                                          ; preds = %entry
+  %add = add nsw i32 %mul, %div
+  %add1 = add nsw i32 %add, %s
+  br label %if.end
+{ add1 add s div mul cmp }
+---
+{ add1 add s div mul cmp }
+if.end:                                           ; preds = %if.then, %entry
+  %x.0 = phi i32 [ %add1, %if.then ], [ %mul, %entry ]
+  ret i32 %x.0
+{ x.0 add s div mul cmp }
+---

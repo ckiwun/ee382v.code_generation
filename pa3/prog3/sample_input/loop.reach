@@ -1,0 +1,46 @@
+
+******  DataFlow Result for function f  ******
+{ s }
+entry:
+  br label %while.cond
+{ s }
+---
+{ call j.1 s cmp i.0 j.0 add call5 cmp2 }
+while.cond:                                       ; preds = %while.end, %entry
+  %i.0 = phi i32 [ 0, %entry ], [ %call5, %while.end ]
+  %j.0 = phi i32 [ 0, %entry ], [ %j.1, %while.end ]
+  %add = add nsw i32 %s, 10
+  %cmp = icmp slt i32 %i.0, %add
+  br i1 %cmp, label %while.body, label %while.end6
+{ call s cmp i.0 j.0 add cmp2 }
+---
+{ cmp2 add j.0 i.0 cmp s call }
+while.body:                                       ; preds = %while.cond
+  %call = call i32 @extra(i32 %i.0)
+  br label %while.cond1
+{ cmp2 add j.0 i.0 cmp s call }
+---
+{ call4 cmp2 add j.0 i.0 cmp s call j.1 }
+while.cond1:                                      ; preds = %while.body3, %while.body
+  %j.1 = phi i32 [ %j.0, %while.body ], [ %call4, %while.body3 ]
+  %cmp2 = icmp slt i32 %j.1, %s
+  br i1 %cmp2, label %while.body3, label %while.end
+{ cmp2 add j.0 i.0 cmp s call j.1 }
+---
+{ cmp2 add j.0 i.0 cmp s call j.1 }
+while.body3:                                      ; preds = %while.cond1
+  %call4 = call i32 @extra2(i32 %call, i32 %j.1)
+  br label %while.cond1
+{ call4 cmp2 add j.0 i.0 cmp s call j.1 }
+---
+{ call j.1 s cmp i.0 j.0 add cmp2 }
+while.end:                                        ; preds = %while.cond1
+  %call5 = call i32 @extra(i32 %j.1)
+  br label %while.cond
+{ call j.1 s cmp i.0 j.0 add call5 cmp2 }
+---
+{ cmp2 add j.0 i.0 cmp s call }
+while.end6:                                       ; preds = %while.cond
+  ret i32 %i.0
+{ cmp2 add j.0 i.0 cmp s call }
+---
