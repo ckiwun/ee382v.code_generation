@@ -15,6 +15,8 @@ public:
 	static char ID;
 	LiveAnalysis() : llvm::FunctionPass(ID) {}
 
+	bool doInitialization() {return false;}
+	bool doFinalization() {return false;}
 	bool runOnFunction(llvm::Function&);
 
 	// We don't modify the program, so we preserve all analyses

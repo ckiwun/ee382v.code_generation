@@ -11,6 +11,7 @@
 
 using namespace llvm;
 using namespace ee382v;
+class Dataflow;
 
 bool LiveAnalysis::runOnFunction(Function& F)
 {
