@@ -4,19 +4,24 @@
 #include "llvm/Pass.h"
 #include "llvm/IR/Instructions.h"
 
+#include "util.h"
+#include "meet.h"
+#include "transfer.h"
+#include "dataflow.h"
+
 namespace ee382v
 {
 
 class  LiveAnalysis : public llvm::FunctionPass {
 private:
 	// Private field declaration here
-
+	Dataflow* df;
 public:
 	static char ID;
-	LiveAnalysis() : llvm::FunctionPass(ID) {}
+	LiveAnalysis() : llvm::FunctionPass(ID) {
+		df = new Dataflow(10);
+	}
 
-	bool doInitialization() {return false;}
-	bool doFinalization() {return false;}
 	bool runOnFunction(llvm::Function&);
 
 	// We don't modify the program, so we preserve all analyses

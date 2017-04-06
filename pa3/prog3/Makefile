@@ -1,21 +1,28 @@
-CXXFLAGS = $(shell llvm-config --cxxflags) -fno-rtti
+CXXFLAGS = -w $(shell llvm-config --cxxflags) -fno-rtti
 
 all: live.so reach.so
+reach: reach.so
+live: live.so
 
-dataflow.o: dataflow.cpp dataflow.h Makefile
-	$(CXX) $(CXXFLAGS) dataflow.cpp -c -o $@
+.PHONY: live reach clean
 
-live.o: live.cpp live.h Makefile
+live.o: live.cpp live.h dataflow.h Makefile
 	$(CXX) $(CXXFLAGS) live.cpp -c -o $@
-
-reach.o: reach.cpp reach.h Makefile
+reach.o: reach.cpp reach.h dataflow.h Makefile
 	$(CXX) $(CXXFLAGS) reach.cpp -c -o $@
+#dataflow.o: dataflow.h Makefile
+#	$(CXX) $(CXXFLAGS) dataflow.h -c -o $@
+#util.o: util.h Makefile
+#	$(CXX) $(CXXFLAGS) util.h -c -o $@
+#meet.o: meet.h Makefile
+#	$(CXX) $(CXXFLAGS) meet.h -c -o $@
+#transfer.o: transfer.h Makefile
+#	$(CXX) $(CXXFLAGS) transfer.h -c -o $@
 
-live.so: dataflow.o live.o 
+live.so: live.o 
 	$(CXX) -shared $^ -o $@
-
-reach.so: reach.o dataflow.o
+reach.so: reach.o 
 	$(CXX) -shared $^ -o $@
 
 clean:
-	rm -f *.o *~ *.so *.ll *.bc *.out ready/*
+	rm -f *.o *~ *.so

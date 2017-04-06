@@ -4,26 +4,20 @@
 #include "llvm/Pass.h"
 #include "llvm/IR/Instructions.h"
 
-namespace ee382v
-{
+namespace ee382v {
 
 class Dataflow {
 private:
-
-public:
-	Dataflow(int id) : _id(id) {}
-	virtual ~Dataflow();
-
 	int _id;
-	virtual int getID();
-
-};
-
-class Live : public Dataflow {
-private:
 
 public:
-	Live(int id) : Dataflow(id) {}
+	Dataflow() {}
+	Dataflow(int id) : _id(id) {}
+	virtual ~Dataflow() = default;
+
+	virtual int getID() {return _id;}
+
+	
 
 };
 

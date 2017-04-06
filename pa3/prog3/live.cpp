@@ -1,5 +1,5 @@
 #include "live.h"
-#include "dataflow.h"
+#include "DataFlowAnnotator.h"
 
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Function.h>
@@ -11,18 +11,9 @@
 
 using namespace llvm;
 using namespace ee382v;
-class Dataflow;
 
 bool LiveAnalysis::runOnFunction(Function& F)
 {
-	Dataflow* a = new Dataflow(10);
-	outs() << a->getID();
-
-	for(Function::iterator bb=F.begin();bb!=F.end();bb++)
-	{
-		outs() << bb->getName() << "\n";
-	}
-
 	return false;
 }
 
