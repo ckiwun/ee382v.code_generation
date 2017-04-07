@@ -17,7 +17,7 @@
 
 // Of course, if you can write your own annotator that behaves exactly like this one and is eaiser for you to use, feel free to do that.
 
-namespace example
+namespace ee382v
 {
 
 template <typename AnalysisType>
@@ -32,7 +32,8 @@ private:
 	{
 		os << "{ ";
 		for (auto v: state)
-			os << v->getName() << " ";
+			//os << v->getName() << " ";
+			os << v << " ";
 		os << "}";
 	}
 
