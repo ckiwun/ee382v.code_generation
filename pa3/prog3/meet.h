@@ -1,6 +1,10 @@
 #ifndef EE382V_ASSIGNMENT3_MEET_H
 #define EE382V_ASSIGNMENT3_MEET_H
 
+#include "llvm/Analysis/Interval.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/CFG.h"
+
 #include <set>
 #include <map>
 
@@ -26,6 +30,14 @@ public:
 
 	virtual bool operator()(BasicBlock* BB, DFMap& IN, DFMap& OUT) override
 	{
+		bool change = false;
+		for(auto iter = succ_begin(BB); iter!=succ_end(BB); iter++)
+		{
+			auto merged = IN[*iter];
+			for(auto& reg:merged)
+				change |= OUT[BB].insert(reg).second;
+		}
+		//return change;
 		return false;
 	}
 };

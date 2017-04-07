@@ -16,7 +16,7 @@ bool LiveAnalysis::runOnFunction(Function& F)
 {
 	df->compute(F);
 	DataFlowAnnotator<LiveAnalysis> annotator(*this, outs());
-	annotator.print(F);
+	//annotator.print(F);
 	return false;
 }
 

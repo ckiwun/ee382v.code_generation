@@ -4,7 +4,6 @@
 #include "llvm/Pass.h"
 #include "llvm/IR/Instructions.h"
 
-#include "util.h"
 #include "meet.h"
 #include "transfer.h"
 #include "dataflow.h"

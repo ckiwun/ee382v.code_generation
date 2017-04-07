@@ -25,6 +25,7 @@ public:
 	Transfer* _transfer;
 	DFMap _imap, _omap;
 	TrackedSet _initial;
+	std::deque<llvm::BasicBlock*> BBlist;
 	
 	Dataflow() {}
 	Dataflow(bool forward, Meet* meet, Transfer* transfer)
@@ -32,18 +33,18 @@ public:
 
 	void compute(llvm::Function& F)
 	{
-		std::deque<llvm::BasicBlock*> BBlist;
-		if(_forward)
+		//use iterator order right now
+		//TODO: modify to InOrder List
+		for(auto &bb: F)
 		{
-			for(auto &bb : F)
+			_imap[&bb]=TrackedSet();
+			_omap[&bb]=TrackedSet();
+			if(_forward)
 				BBlist.push_back(&bb);
-		}
-		else
-		{
-			for(auto &bb : F)
+			else
 				BBlist.push_front(&bb);
 		}
-
+		_transfer->calculateGENKILL(F);
 		bool change = true;
 		while(change)
 		{
