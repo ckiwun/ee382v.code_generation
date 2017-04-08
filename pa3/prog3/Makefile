@@ -17,4 +17,4 @@ reach.so: reach.o
 	$(CXX) -shared $^ -o $@
 
 clean:
-	rm -f *.o *~ *.so
+	rm -f *.o *~ *.so *.bc

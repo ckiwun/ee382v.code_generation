@@ -6,6 +6,7 @@ clang -emit-llvm -c sample_input/$1.c
 cp $1.bc sample_input
 opt -instnamer $1.bc | opt -mem2reg -o input.bc
 llvm-dis input.bc -o input.ll
+rm $1.bc
 make
 echo ----Live----
 opt -load ./live.so -live input.bc -disable-output > sample_input/$1.live 2>&1

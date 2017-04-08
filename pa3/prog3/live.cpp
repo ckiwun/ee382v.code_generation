@@ -17,7 +17,7 @@ bool LiveAnalysis::runOnFunction(Function& F)
 	TrackedSet initial;
 	df->init(F, initial);
 	df->compute(F);
-	DataFlowAnnotator<LiveAnalysis> annotator(*this, outs());
+	DataFlowAnnotator<LiveAnalysis> annotator(*this);
 	annotator.print(F);
 	return false;
 }
