@@ -4,6 +4,7 @@
 #include "llvm/Analysis/Interval.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
+#include "llvm/IR/Instructions.h"
 
 #include <set>
 #include <map>
@@ -33,12 +34,29 @@ public:
 		bool change = false;
 		for(auto iter = succ_begin(BB); iter!=succ_end(BB); iter++)
 		{
-			auto merged = IN[*iter];
-			for(auto& reg:merged)
-				change |= OUT[BB].insert(reg).second;
+			//since I record all possible variable in successors' IN(see transfer)
+			//but I only want corresponding variable on the connected edge when I merge
+			//so I need to make sure other phi variable from other predecessor are not moerged
+			TrackedSet notMyPhi;
+			for(auto& inst: (*(*iter)))
+			{
+				if(isa<PHINode>(inst))
+				{
+					const PHINode* phi = &(cast<PHINode>(inst));
+					for(unsigned int i=0;i<phi->getNumIncomingValues();i++)
+					{
+						if(phi->getIncomingBlock(i)->getName().str() != BB->getName().str())
+							notMyPhi.insert(phi->getIncomingValue(i)->getName().str());
+					}
+				}
+			}
+			for(auto& reg: IN[*iter])
+			{
+				if(notMyPhi.count(reg)==0)
+					change |= OUT[BB].insert(reg).second;
+			}
 		}
-		//return change;
-		return false;
+		return change;
 	}
 };
 

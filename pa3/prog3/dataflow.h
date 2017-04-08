@@ -34,7 +34,7 @@ public:
 	void compute(llvm::Function& F)
 	{
 		//use iterator order right now
-		//TODO: modify to InOrder List
+		//TODO: maybe InOrder make more sense?
 		for(auto &bb: F)
 		{
 			_imap[&bb]=TrackedSet();
@@ -44,7 +44,7 @@ public:
 			else
 				BBlist.push_front(&bb);
 		}
-		_transfer->calculateGENKILL(F);
+		_transfer->calculateGENKILL(F,outs());
 		bool change = true;
 		while(change)
 		{
