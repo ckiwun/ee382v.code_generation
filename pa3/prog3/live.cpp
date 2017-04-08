@@ -14,6 +14,8 @@ using namespace ee382v;
 
 bool LiveAnalysis::runOnFunction(Function& F)
 {
+	TrackedSet initial;
+	df->init(F, initial);
 	df->compute(F);
 	DataFlowAnnotator<LiveAnalysis> annotator(*this, outs());
 	annotator.print(F);

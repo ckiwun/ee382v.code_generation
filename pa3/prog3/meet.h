@@ -66,7 +66,15 @@ public:
 
 	virtual bool operator()(BasicBlock* BB, DFMap& IN, DFMap& OUT) override
 	{
-		return false;
+		bool change = false;
+		for(auto iter = pred_begin(BB); iter!=pred_end(BB); iter++)
+		{
+			for(auto& reg: OUT[*iter])
+			{
+				change |= IN[BB].insert(reg).second;
+			}
+		}
+		return change;
 	}
 };
 

@@ -14,11 +14,16 @@ using namespace ee382v;
 
 bool RdefAnalysis::runOnFunction(Function& F)
 {
-	for(Function::iterator bb=F.begin();bb!=F.end();bb++)
+	TrackedSet initial;
+	//need to get the argument list as initial condition
+	for (auto iter = F.arg_begin(); iter!=F.arg_end(); iter++)
 	{
-		outs() << bb->getName() << "\n";
+		initial.insert(iter->getName().str());
 	}
-
+	df->init(F, initial);
+	df->compute(F);
+	DataFlowAnnotator<RdefAnalysis> annotator(*this, outs());
+	annotator.print(F);
 	return false;
 }
 
@@ -29,7 +34,7 @@ void RdefAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
 
 // LLVM uses the address of this static member to identify the pass, so the
 // initialization value is unimportant.
-char RdefAnalysis::ID = 1;
+char RdefAnalysis::ID = 0;
 
 // Register the pass name to allow it to be called with opt:
 // See http://llvm.org/releases/3.9.1/docs/WritingAnLLVMPass.html#running-a-pass-with-opt for more info.

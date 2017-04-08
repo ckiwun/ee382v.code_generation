@@ -31,7 +31,7 @@ public:
 	Dataflow(bool forward, Meet* meet, Transfer* transfer)
 		: _forward(forward), _meet(meet), _transfer(transfer) {}
 
-	void compute(llvm::Function& F)
+	void init(llvm::Function& F, TrackedSet& initial)
 	{
 		//use iterator order right now
 		//TODO: maybe InOrder make more sense?
@@ -44,7 +44,13 @@ public:
 			else
 				BBlist.push_front(&bb);
 		}
+		if(_forward)
+			_imap[&(F.getEntryBlock())] = initial;
 		_transfer->calculateGENKILL(F,outs());
+	}
+
+	void compute(llvm::Function& F)
+	{
 		bool change = true;
 		while(change)
 		{
