@@ -15,9 +15,10 @@
 
 namespace ee382v {
 
+template<typename TrackedSet>
 class Dataflow {
 public:
-	using TrackedSet = std::set<std::string>;
+	//using TrackedSet = std::set<std::string>;
 	using DFMap = std::map<const llvm::BasicBlock*,TrackedSet>;
 
 	bool _forward;
@@ -33,20 +34,24 @@ public:
 
 	void init(llvm::Function& F, TrackedSet& initial)
 	{
-		//use iterator order right now
-		//TODO: maybe InOrder make more sense?
 		for(auto &bb: F)
 		{
-			_imap[&bb]=TrackedSet();
-			_omap[&bb]=TrackedSet();
+			_imap[&bb]=initial;
+			_omap[&bb]=initial;
 			if(_forward)
 				BBlist.push_back(&bb);
 			else
 				BBlist.push_front(&bb);
 		}
+		_transfer->calculateGENKILL(F);
+	}
+
+	void setBoundary(llvm::Function& F, TrackedSet& bound)
+	{
 		if(_forward)
-			_imap[&(F.getEntryBlock())] = initial;
-		_transfer->calculateGENKILL(F,outs());
+			_imap[&(F.getEntryBlock())] = bound;
+		else
+			_omap[&(F.back())] = bound;
 	}
 
 	void compute(llvm::Function& F)

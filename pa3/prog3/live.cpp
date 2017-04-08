@@ -14,10 +14,11 @@ using namespace ee382v;
 
 bool LiveAnalysis::runOnFunction(Function& F)
 {
-	TrackedSet initial;
-	df->init(F, initial);
+	TrackedSet initial,bound;
+	df->init(F,initial);
+	df->setBoundary(F,bound);
 	df->compute(F);
-	DataFlowAnnotator<LiveAnalysis> annotator(*this);
+	DataFlowAnnotator<LiveAnalysis> annotator(*this,outs());
 	annotator.print(F);
 	return false;
 }

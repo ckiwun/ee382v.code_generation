@@ -14,13 +14,13 @@ namespace ee382v
 class RdefAnalysis : public llvm::FunctionPass {
 private:
 	// Private field declaration here
-	Dataflow* df;
 public:
 	using TrackedSet = std::set<std::string>;
+	Dataflow<TrackedSet>* df;
 	static char ID;
 	RdefAnalysis() : llvm::FunctionPass(ID)
 	{
-		df = new Dataflow(true,new RdefMeet(),new RdefTransfer());
+		df = new Dataflow<TrackedSet>(true,new RdefMeet(),new RdefTransfer());
 	}
 
 	bool runOnFunction(llvm::Function&);

@@ -14,14 +14,15 @@ using namespace ee382v;
 
 bool RdefAnalysis::runOnFunction(Function& F)
 {
-	TrackedSet initial;
+	TrackedSet initial,bound;
 	for (auto iter = F.arg_begin(); iter!=F.arg_end(); iter++)
 	{
-		initial.insert(iter->getName().str());
+		bound.insert(iter->getName().str());
 	}
 	df->init(F, initial);
+	df->setBoundary(F, bound);
 	df->compute(F);
-	DataFlowAnnotator<RdefAnalysis> annotator(*this);
+	DataFlowAnnotator<RdefAnalysis> annotator(*this,outs());
 	annotator.print(F);
 	return false;
 }

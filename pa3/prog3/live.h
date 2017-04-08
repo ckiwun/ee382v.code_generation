@@ -16,13 +16,13 @@ namespace ee382v
 class  LiveAnalysis : public llvm::FunctionPass {
 private:
 	// Private field declaration here
-	Dataflow* df;
 public:
 	using TrackedSet = std::set<std::string>;
+	Dataflow<TrackedSet>* df;
 	static char ID;
 	LiveAnalysis() : llvm::FunctionPass(ID)
 	{
-		df = new Dataflow(false,new LiveMeet(),new LiveTransfer());
+		df = new Dataflow<TrackedSet>(false,new LiveMeet(),new LiveTransfer());
 	}
 
 	bool runOnFunction(llvm::Function&);
